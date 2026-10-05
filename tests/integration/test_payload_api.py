@@ -70,6 +70,7 @@ def test_read_malformed_id_returns_422(client: TestClient) -> None:
         pytest.param({"list_1": ["a" * 1001], "list_2": ["b"]}, id="string-too-long"),
         pytest.param({"list_1": ["a"] * 1001, "list_2": ["b"] * 1001}, id="too-many-items"),
         pytest.param({"list_1": [1], "list_2": ["b"]}, id="not-a-string"),
+        pytest.param({"list_1": ["a\x00b"], "list_2": ["c"]}, id="nul-character"),
     ],
 )
 def test_create_rejects_invalid_input(client: TestClient, body: dict[str, Any]) -> None:

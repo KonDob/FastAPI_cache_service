@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 
 from app.db.session import SessionDep
 from app.services import payload as payload_service
@@ -22,7 +22,15 @@ router = APIRouter(prefix="/payload", tags=["payload"])
 MAX_ITEMS_PER_LIST = 1000
 MAX_STRING_LENGTH = 1000
 
-BoundedString = Annotated[str, Field(max_length=MAX_STRING_LENGTH)]
+
+def _reject_nul(value: str) -> str:
+    # PostgreSQL text cannot store NUL; without this check such input fails with a 500.
+    if "\x00" in value:
+        raise ValueError("string must not contain NUL characters")
+    return value
+
+
+BoundedString = Annotated[str, Field(max_length=MAX_STRING_LENGTH), AfterValidator(_reject_nul)]
 BoundedList = Annotated[list[BoundedString], Field(min_length=1, max_length=MAX_ITEMS_PER_LIST)]
 
 
