@@ -5,7 +5,7 @@ PostgreSQL behaviour (ON CONFLICT, unique constraints under concurrency).
 """
 
 import os
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,20 +17,10 @@ from app.core.config import Settings
 from app.db.base import Base
 from app.db.session import get_session
 from app.main import app
-from app.services.transformer import get_transformer, upper_case_transformer
+from app.services.transformer import get_transformer
+from tests.integration.fakes import CountingTransformer
 
 TEST_DATABASE_NAME = "cache_test"
-
-
-class CountingTransformer:
-    """Real transformation plus a record of every call, to assert on cache behaviour."""
-
-    def __init__(self) -> None:
-        self.calls: list[list[str]] = []
-
-    def __call__(self, values: Sequence[str]) -> list[str]:
-        self.calls.append(list(values))
-        return upper_case_transformer(values)
 
 
 def _test_database_url() -> URL:
