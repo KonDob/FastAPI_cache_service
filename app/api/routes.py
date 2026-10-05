@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.db.session import SessionDep
 from app.services import payload as payload_service
+from app.services.transformer import TransformerDep
 
 router = APIRouter(prefix="/payload", tags=["payload"])
 
@@ -43,9 +44,12 @@ class PayloadReadResponse(BaseModel):
     },
 )
 def create_payload(
-    body: PayloadCreate, response: Response, session: SessionDep
+    body: PayloadCreate,
+    response: Response,
+    session: SessionDep,
+    transformer: TransformerDep,
 ) -> PayloadCreateResponse:
-    result = payload_service.create_payload(session, body.list_1, body.list_2)
+    result = payload_service.create_payload(session, transformer, body.list_1, body.list_2)
     # 201 vs 200 tells clients whether a new resource appeared, while POST stays idempotent.
     if not result.created:
         response.status_code = status.HTTP_200_OK

@@ -1,8 +1,4 @@
-"""Payload creation and lookup.
-
-The transformer and its per-string cache land in a follow-up change; for now the
-output is produced by a placeholder so persistence can be reviewed on its own.
-"""
+"""Payload creation and lookup."""
 
 import hashlib
 import json
@@ -14,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Payload
+from app.services.transformer import Transformer
 
 
 class CreateResult(NamedTuple):
@@ -22,13 +19,17 @@ class CreateResult(NamedTuple):
     created: bool
 
 
-def create_payload(session: Session, list_1: list[str], list_2: list[str]) -> CreateResult:
+def create_payload(
+    session: Session, transformer: Transformer, list_1: list[str], list_2: list[str]
+) -> CreateResult:
     input_hash = _hash_input(list_1, list_2)
     existing_id = _find_id_by_hash(session, input_hash)
     if existing_id is not None:
         return CreateResult(id=existing_id, created=False)
 
-    payload = Payload(input_hash=input_hash, output=_build_output(list_1, list_2))
+    transformed = _transform(transformer, [*list_1, *list_2])
+    output = ", ".join(interleave([transformed[v] for v in list_1], [transformed[v] for v in list_2]))
+    payload = Payload(input_hash=input_hash, output=output)
     session.add(payload)
     try:
         session.commit()
@@ -57,7 +58,11 @@ def _find_id_by_hash(session: Session, input_hash: str) -> UUID | None:
     return session.scalar(select(Payload.id).where(Payload.input_hash == input_hash))
 
 
-def _build_output(list_1: list[str], list_2: list[str]) -> str:
-    # Placeholder output: enough for the API contract, not the final algorithm.
-    interleaved = [item for pair in zip(list_1, list_2, strict=True) for item in pair]
-    return ", ".join(value.upper() for value in interleaved)
+def interleave(first: list[str], second: list[str]) -> list[str]:
+    return [item for pair in zip(first, second, strict=True) for item in pair]
+
+
+def _transform(transformer: Transformer, values: list[str]) -> dict[str, str]:
+    # A string repeated within one request is sent to the service only once.
+    unique = list(dict.fromkeys(values))
+    return dict(zip(unique, transformer(unique), strict=True))
