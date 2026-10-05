@@ -1,7 +1,7 @@
 """HTTP contract of the payload endpoints."""
 
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,7 +21,9 @@ def test_create_returns_201_with_new_id(client: TestClient) -> None:
     response = client.post("/payload", json=SAMPLE_REQUEST)
 
     assert response.status_code == 201
-    assert response.json()["message"] == "Payload created"
+    body = response.json()
+    assert body == {"id": body["id"], "message": "Payload created"}
+    assert UUID(body["id"]).version == 4
 
 
 def test_read_returns_sample_output_from_task(client: TestClient) -> None:
@@ -64,21 +66,50 @@ def test_read_malformed_id_returns_422(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize(
-    "body",
+    ("body", "loc", "error_type"),
     [
-        pytest.param({"list_1": ["a"]}, id="missing-list"),
-        pytest.param({"list_1": [], "list_2": []}, id="empty-lists"),
-        pytest.param({"list_1": ["a"], "list_2": ["b", "c"]}, id="different-lengths"),
-        pytest.param({"list_1": ["a" * 1001], "list_2": ["b"]}, id="string-too-long"),
-        pytest.param({"list_1": ["a"] * 1001, "list_2": ["b"] * 1001}, id="too-many-items"),
-        pytest.param({"list_1": [1], "list_2": ["b"]}, id="not-a-string"),
-        pytest.param({"list_1": ["a\x00b"], "list_2": ["c"]}, id="nul-character"),
+        pytest.param({"list_1": ["a"]}, ["body", "list_2"], "missing", id="missing-list"),
+        pytest.param(
+            {"list_1": [], "list_2": []}, ["body", "list_1"], "too_short", id="empty-lists"
+        ),
+        pytest.param(
+            {"list_1": ["a"], "list_2": ["b", "c"]}, ["body"], "value_error", id="different-lengths"
+        ),
+        pytest.param(
+            {"list_1": ["a" * 1001], "list_2": ["b"]},
+            ["body", "list_1", 0],
+            "string_too_long",
+            id="string-too-long",
+        ),
+        pytest.param(
+            {"list_1": ["a"] * 1001, "list_2": ["b"] * 1001},
+            ["body", "list_1"],
+            "too_long",
+            id="too-many-items",
+        ),
+        pytest.param(
+            {"list_1": [1], "list_2": ["b"]},
+            ["body", "list_1", 0],
+            "string_type",
+            id="not-a-string",
+        ),
+        pytest.param(
+            {"list_1": ["a\x00b"], "list_2": ["c"]},
+            ["body", "list_1", 0],
+            "value_error",
+            id="nul-character",
+        ),
     ],
 )
-def test_create_rejects_invalid_input(client: TestClient, body: dict[str, Any]) -> None:
+def test_create_rejects_invalid_input(
+    client: TestClient, body: dict[str, Any], loc: list[str | int], error_type: str
+) -> None:
     response = client.post("/payload", json=body)
 
     assert response.status_code == 422
+    # Checking where and why guards against a 422 raised for an unrelated reason.
+    errors = [(error["loc"], error["type"]) for error in response.json()["detail"]]
+    assert (loc, error_type) in errors
 
 
 def test_create_rejects_lone_surrogate_with_422(client: TestClient) -> None:

@@ -161,3 +161,6 @@ constraints under concurrency). The transformer is replaced by a fake that recor
 which is how the tests prove that cached strings are never sent to it again. Race conditions
 are reproduced deterministically by running a competing request from inside the transformer
 call, instead of relying on thread timing.
+
+Tests must run sequentially: they share the `cache_test` database and truncate it before
+each test, so parallel runners such as `pytest -n` (pytest-xdist) are not supported.

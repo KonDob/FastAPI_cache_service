@@ -1,5 +1,7 @@
 """The transformer is called only for strings it has not transformed before."""
 
+import hashlib
+
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -32,6 +34,24 @@ def test_repeated_payload_does_not_call_transformer(
     _create(client, ["a", "b"], ["c", "d"])
 
     assert transformer.calls == []
+
+
+def test_cached_result_is_used_instead_of_transforming_again(
+    client: TestClient, transformer: CountingTransformer, session_factory: sessionmaker[Session]
+) -> None:
+    # A value the transformer would never produce proves the output really comes from the cache.
+    with session_factory() as session:
+        session.add(
+            TransformCache(
+                input_hash=hashlib.sha256(b"a").hexdigest(), input="a", output="FROM-CACHE"
+            )
+        )
+        session.commit()
+
+    payload_id = _create(client, ["a"], ["b"])
+
+    assert transformer.calls == [["b"]]
+    assert client.get(f"/payload/{payload_id}").json() == {"output": "FROM-CACHE, B"}
 
 
 def test_new_payload_of_known_strings_is_served_from_cache(
