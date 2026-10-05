@@ -26,9 +26,9 @@ The full task description is in [`Test task Python.md`](./Test%20task%20Python.m
 
 ## Status
 
-Work in progress. The service and the `cache-cli` client are functional and covered by tests:
-payloads are persisted in PostgreSQL, identical inputs reuse their id, and transformer results
-are cached per string. The Docker image comes next.
+Feature complete. The service and the `cache-cli` client are functional, covered by tests and
+run in Docker: payloads are persisted in PostgreSQL, identical inputs reuse their id, and
+transformer results are cached per string.
 
 ## Clarifications
 
@@ -47,6 +47,8 @@ Questions raised on the task and the answers received from the reviewers:
   Repeating a request is therefore safe and never creates duplicates.
 - `POST /payload` returns `502 Bad Gateway` when the transformer service fails or returns a
   malformed answer; nothing is cached or stored in that case.
+- `GET /health` returns `{"status": "ok"}`, or `503` when the database is unreachable; the
+  Docker healthcheck uses it.
 - `GET /payload/{id}` returns `{"output": "..."}`, or `404` for an unknown id.
 - Both lists must be non-empty and of equal length, hold at most 1000 items each, and every
   string must be at most 1000 characters long and free of NUL characters; otherwise `422`.
@@ -121,18 +123,33 @@ Questions raised on the task and the answers received from the reviewers:
 ├── tests/
 │   ├── unit/          # pure helpers and CLI arguments, no database
 │   └── integration/   # API and service against real PostgreSQL
-├── docker-compose.yml # local PostgreSQL
+├── Dockerfile         # service image
+├── docker-compose.yml # service + PostgreSQL
 ├── Test task Python.md
 ├── pyproject.toml
 └── README.md
 ```
 
-## Run (local)
+## Run with Docker
+
+```bash
+docker compose up -d --build --wait   # service on http://localhost:8000 + PostgreSQL
+curl http://localhost:8000/health
+docker compose exec app cache-cli -j '{"list_1": ["a"], "list_2": ["b"]}'
+docker compose down                   # add -v to also drop the database volume
+```
+
+`APP_PORT` and `DB_PORT` change the published ports (defaults `8000` and `5432`). The image is
+built in two stages with `uv` from the lock file; the runtime stage contains only the virtualenv
+(no sources, no dev tools) and runs as an unprivileged user. `cache-cli` is installed in the
+image too.
+
+## Run (local development)
 
 ```bash
 uv sync
-cp .env.example .env          # adjust DB_PORT / DATABASE_URL if 5432 is taken
-docker compose up -d --wait   # PostgreSQL
+cp .env.example .env               # adjust DB_PORT / DATABASE_URL if 5432 is taken
+docker compose up -d --wait db     # PostgreSQL only
 uv run uvicorn app.main:app --reload
 ```
 
@@ -193,7 +210,7 @@ Design notes:
 ## Tests and checks
 
 ```bash
-docker compose up -d --wait   # integration tests need PostgreSQL
+docker compose up -d --wait db   # integration tests need PostgreSQL
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
 uv run mypy app tests
