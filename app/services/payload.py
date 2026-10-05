@@ -78,15 +78,12 @@ def _transform_cached(
     """Map each value to its transformation, calling the service only for unseen strings."""
     # A string repeated within one request is looked up and sent to the service only once.
     hashes = {value: _sha256(value) for value in dict.fromkeys(values)}
-    cached = dict(
-        session.execute(
-            select(TransformCache.input_hash, TransformCache.output).where(
-                TransformCache.input_hash.in_(hashes.values())
-            )
+    cached_rows = session.execute(
+        select(TransformCache.input_hash, TransformCache.output).where(
+            TransformCache.input_hash.in_(hashes.values())
         )
-        .tuples()
-        .all()
-    )
+    ).all()
+    cached = {input_hash: output for input_hash, output in cached_rows}
     result = {value: cached[h] for value, h in hashes.items() if h in cached}
     missing = [value for value in hashes if value not in result]
     logger.info("Transform cache: %d hit(s), %d miss(es)", len(result), len(missing))
