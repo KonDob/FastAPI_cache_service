@@ -6,6 +6,8 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.integration.fakes import CountingTransformer
+
 SAMPLE_REQUEST = {
     "list_1": ["first string", "second string", "third string"],
     "list_2": ["other string", "another string", "last string"],
@@ -79,9 +81,16 @@ def test_create_rejects_invalid_input(client: TestClient, body: dict[str, Any]) 
     assert response.status_code == 422
 
 
-def test_create_accepts_input_at_the_limits(client: TestClient) -> None:
-    body = {"list_1": ["a" * 1000] * 1000, "list_2": ["b" * 1000] * 1000}
+def test_create_accepts_input_at_the_limits(
+    client: TestClient, transformer: CountingTransformer
+) -> None:
+    # All strings distinct: the worst case for the single cache INSERT of one request.
+    def max_length_strings(prefix: str) -> list[str]:
+        return [f"{prefix}{i:04}".ljust(1000, "x") for i in range(1000)]
+
+    body = {"list_1": max_length_strings("a"), "list_2": max_length_strings("b")}
 
     response = client.post("/payload", json=body)
 
     assert response.status_code == 201
+    assert len(transformer.calls[0]) == 2000
