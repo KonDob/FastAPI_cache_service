@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -87,6 +88,29 @@ def test_request_rejected_by_server_exits_with_failure(
 
     assert exit_code == EXIT_FAILURE
     assert "POST /payload returned 422" in capsys.readouterr().err
+
+
+def test_unexpected_response_exits_with_failure(capsys: pytest.CaptureFixture[str]) -> None:
+    # --host pointing at some other web server that answers 200 with HTML.
+    foreign = httpx2.Client(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, text="<html></html>")),
+        base_url="http://elsewhere",
+    )
+
+    exit_code = main(["-j", REQUEST_JSON], http_client=foreign)
+
+    assert exit_code == EXIT_FAILURE
+    assert "POST /payload returned an unexpected response" in capsys.readouterr().err
+
+
+def test_unwritable_output_exits_with_failure(
+    client: TestClient, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Valid arguments (the parent directory exists), yet a directory cannot be written as a file.
+    exit_code = main(["-j", REQUEST_JSON, "-o", str(tmp_path)], http_client=client)
+
+    assert exit_code == EXIT_FAILURE
+    assert "cannot write output" in capsys.readouterr().err
 
 
 def test_unreachable_server_exits_with_failure(capsys: pytest.CaptureFixture[str]) -> None:

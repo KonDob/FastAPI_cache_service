@@ -30,15 +30,26 @@ def run(client: httpx2.Client, request: PayloadRequest, repeat: int) -> list[Ite
 def _run_once(client: httpx2.Client, request: PayloadRequest, iteration: int) -> IterationResult:
     started = time.perf_counter()
     created = _call(client, "POST", "/payload", json=request.model_dump())
-    payload_id = created.json()["id"]
+    payload_id = str(_field(created, "id"))
     read = _call(client, "GET", f"/payload/{payload_id}")
     return IterationResult(
         iteration=iteration,
         id=payload_id,
         status="created" if created.status_code == httpx2.codes.CREATED else "existing",
-        output=read.json()["output"],
+        output=str(_field(read, "output")),
         elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
     )
+
+
+def _field(response: httpx2.Response, name: str) -> Any:
+    # --host may point at something that is not this service and still answer 2xx.
+    try:
+        return response.json()[name]
+    except (ValueError, KeyError, TypeError):
+        raise ServiceError(
+            f"{response.request.method} {response.request.url.path} returned an unexpected "
+            f"response: {response.text[:200]}"
+        ) from None
 
 
 def _call(client: httpx2.Client, method: str, url: str, json: Any = None) -> httpx2.Response:

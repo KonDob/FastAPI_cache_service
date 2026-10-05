@@ -42,7 +42,11 @@ def main(argv: Sequence[str] | None = None, http_client: httpx2.Client | None = 
         _print_error(str(error))
         return EXIT_FAILURE
 
-    _write(results, settings.output_file)
+    try:
+        _write(results, settings.output_file)
+    except OSError as error:
+        _print_error(f"cannot write output: {error}")
+        return EXIT_FAILURE
     return EXIT_OK
 
 
