@@ -1,0 +1,14 @@
+# Keep the build context small and free of local state and secrets.
+.git
+.venv
+.idea
+.env
+**/__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+tests
+docker-compose.yml
+Dockerfile
