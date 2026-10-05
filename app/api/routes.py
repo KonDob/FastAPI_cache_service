@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field, model_validator
 
+from app.db.session import SessionDep
 from app.services import payload as payload_service
 
 router = APIRouter(prefix="/payload", tags=["payload"])
@@ -41,8 +42,10 @@ class PayloadReadResponse(BaseModel):
         },
     },
 )
-def create_payload(body: PayloadCreate, response: Response) -> PayloadCreateResponse:
-    result = payload_service.create_payload(body.list_1, body.list_2)
+def create_payload(
+    body: PayloadCreate, response: Response, session: SessionDep
+) -> PayloadCreateResponse:
+    result = payload_service.create_payload(session, body.list_1, body.list_2)
     # 201 vs 200 tells clients whether a new resource appeared, while POST stays idempotent.
     if not result.created:
         response.status_code = status.HTTP_200_OK
@@ -51,8 +54,8 @@ def create_payload(body: PayloadCreate, response: Response) -> PayloadCreateResp
 
 
 @router.get("/{payload_id}", response_model=PayloadReadResponse)
-def read_payload(payload_id: UUID) -> PayloadReadResponse:
-    output = payload_service.get_payload(payload_id)
+def read_payload(payload_id: UUID, session: SessionDep) -> PayloadReadResponse:
+    output = payload_service.get_payload(session, payload_id)
     if output is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
