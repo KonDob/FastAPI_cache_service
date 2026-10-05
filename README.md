@@ -54,7 +54,7 @@ Questions raised on the task and the answers received from the reviewers:
   saved in the `payload` table. A payload never changes, so `GET` is a single primary-key
   lookup and never rebuilds the string or touches the transformer.
 - **The transformer is a simulated external service.** It upper-cases strings behind a batch
-  interface (`list[str] -> list[str]`) with an artificial per-call delay, and is injected as a
+  interface (`list[str] -> list[str]`), logs every call, and is injected as a
   FastAPI dependency so tests can replace it with a counting fake.
 - **Transformer results are cached per string** in the `transform_cache` table. On `POST` the
   service looks up all strings of the request at once and calls the transformer **once**, only
@@ -118,7 +118,6 @@ Configuration is read from the environment (or `.env`):
 | Variable | Default | Meaning |
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://cache:cache@localhost:5432/cache` | SQLAlchemy database URL |
-| `TRANSFORMER_DELAY_SECONDS` | `0.5` | Simulated latency of one transformer call |
 | `LOG_LEVEL` | `INFO` | Logs show cache hits/misses and every transformer call |
 
 API docs: `http://127.0.0.1:8000/docs`
