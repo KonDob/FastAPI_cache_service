@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field, model_validator
 
 from app.services import payload as payload_service
@@ -23,7 +23,7 @@ class PayloadCreate(BaseModel):
 
 class PayloadCreateResponse(BaseModel):
     id: UUID
-    message: str = "Payload created successfully"
+    message: str
 
 
 class PayloadReadResponse(BaseModel):
@@ -34,10 +34,20 @@ class PayloadReadResponse(BaseModel):
     "",
     response_model=PayloadCreateResponse,
     status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_200_OK: {
+            "model": PayloadCreateResponse,
+            "description": "Payload for this input already exists; its identifier is reused.",
+        },
+    },
 )
-def create_payload(body: PayloadCreate) -> PayloadCreateResponse:
-    record_id = payload_service.create_payload(body.list_1, body.list_2)
-    return PayloadCreateResponse(id=record_id)
+def create_payload(body: PayloadCreate, response: Response) -> PayloadCreateResponse:
+    result = payload_service.create_payload(body.list_1, body.list_2)
+    # 201 vs 200 tells clients whether a new resource appeared, while POST stays idempotent.
+    if not result.created:
+        response.status_code = status.HTTP_200_OK
+        return PayloadCreateResponse(id=result.id, message="Payload already exists")
+    return PayloadCreateResponse(id=result.id, message="Payload created")
 
 
 @router.get("/{payload_id}", response_model=PayloadReadResponse)
