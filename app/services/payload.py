@@ -26,12 +26,21 @@ class CreateResult(NamedTuple):
 def create_payload(
     session: Session, transformer: Transformer, list_1: list[str], list_2: list[str]
 ) -> CreateResult:
+    """Return the id of the payload for this input, generating and storing it if it is new.
+
+    Steps: reuse an existing payload if the same input was seen before; otherwise get every
+    string's transformation (from the cache where possible), interleave them in the original
+    order, and store the ready-made output.
+    """
+    # Exact repeat of an earlier request: answer without touching the cache or transformer.
     input_hash = _hash_input(list_1, list_2)
     existing_id = _find_id_by_hash(session, input_hash)
     if existing_id is not None:
         return CreateResult(id=existing_id, created=False)
 
+    # A lookup table "string -> transformed string"; it ignores order and duplicates.
     transformed = _transform_cached(session, transformer, [*list_1, *list_2])
+    # Order is restored here: walk the original lists and translate each item via the table.
     output = ", ".join(
         interleave([transformed[v] for v in list_1], [transformed[v] for v in list_2])
     )
@@ -75,9 +84,13 @@ def interleave(first: list[str], second: list[str]) -> list[str]:
 def _transform_cached(
     session: Session, transformer: Transformer, values: list[str]
 ) -> dict[str, str]:
-    """Map each value to its transformation, calling the service only for unseen strings."""
+    """Map each value to its transformation, calling the service only for unseen strings.
+
+    Returns a lookup table, not a list: callers rebuild their own order from it.
+    """
     # A string repeated within one request is looked up and sent to the service only once.
     hashes = {value: _sha256(value) for value in dict.fromkeys(values)}
+    # One query for all strings of the request instead of one per string.
     cached_rows = session.execute(
         select(TransformCache.input_hash, TransformCache.output).where(
             TransformCache.input_hash.in_(hashes.values())
@@ -90,12 +103,14 @@ def _transform_cached(
     if not missing:
         return result
 
+    # A single batch call with only the strings the cache could not answer.
     outputs = transformer(missing)
     # Never cache a misaligned answer: it would serve wrong results for good.
     if len(outputs) != len(missing):
         raise TransformerError(
             f"Transformer returned {len(outputs)} result(s) for {len(missing)} input(s)"
         )
+    # The transformer answers positionally: the i-th output belongs to the i-th input.
     fresh = dict(zip(missing, outputs, strict=True))
     rows = [{"input_hash": hashes[v], "input": v, "output": out} for v, out in fresh.items()]
     # Concurrent requests may cache the same string; the first writer wins, others are no-ops.
