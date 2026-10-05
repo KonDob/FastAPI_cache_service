@@ -1,7 +1,7 @@
 """The transformer is called only for strings it has not transformed before."""
 
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import TransformCache
@@ -66,3 +66,18 @@ def test_string_repeated_in_one_request_is_transformed_once(
     assert client.get(f"/payload/{payload_id}").json() == {"output": "X, X, X, Y"}
     with session_factory() as session:
         assert session.scalar(select(func.count()).select_from(TransformCache)) == 2
+
+
+def test_read_serves_stored_output_without_transformer_or_cache(
+    client: TestClient, transformer: CountingTransformer, session_factory: sessionmaker[Session]
+) -> None:
+    payload_id = _create(client, ["a"], ["b"])
+    transformer.calls.clear()
+    with session_factory() as session:
+        session.execute(delete(TransformCache))
+        session.commit()
+
+    response = client.get(f"/payload/{payload_id}")
+
+    assert response.json() == {"output": "A, B"}
+    assert transformer.calls == []
