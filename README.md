@@ -102,6 +102,9 @@ Questions raised on the task and the answers received from the reviewers:
 │   ├── models/        # ORM models
 │   ├── services/      # payload logic
 │   └── main.py
+├── tests/
+│   ├── unit/          # pure helpers, no database
+│   └── integration/   # API and service against real PostgreSQL
 ├── docker-compose.yml # local PostgreSQL
 ├── Test task Python.md
 ├── pyproject.toml
@@ -125,3 +128,21 @@ Configuration is read from the environment (or `.env`):
 | `LOG_LEVEL` | `INFO` | Logs show cache hits/misses and every transformer call |
 
 API docs: `http://127.0.0.1:8000/docs`
+
+## Tests and checks
+
+```bash
+docker compose up -d --wait   # integration tests need PostgreSQL
+uv run pytest
+uv run ruff check . && uv run ruff format --check .
+uv run mypy app tests
+```
+
+Integration tests use a separate `cache_test` database on the same server as `DATABASE_URL`
+(created automatically and reset before every test), so development data is never touched.
+Set `TEST_DATABASE_URL` to point them elsewhere. They run against PostgreSQL rather than
+SQLite on purpose: the service relies on PostgreSQL behaviour (`ON CONFLICT`, unique
+constraints under concurrency). The transformer is replaced by a fake that records its calls,
+which is how the tests prove that cached strings are never sent to it again. Race conditions
+are reproduced deterministically by running a competing request from inside the transformer
+call, instead of relying on thread timing.
