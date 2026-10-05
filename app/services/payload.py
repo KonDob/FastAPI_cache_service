@@ -32,7 +32,9 @@ def create_payload(
         return CreateResult(id=existing_id, created=False)
 
     transformed = _transform_cached(session, transformer, [*list_1, *list_2])
-    output = ", ".join(interleave([transformed[v] for v in list_1], [transformed[v] for v in list_2]))
+    output = ", ".join(
+        interleave([transformed[v] for v in list_1], [transformed[v] for v in list_2])
+    )
     payload = Payload(input_hash=input_hash, output=output)
     session.add(payload)
     try:
@@ -81,7 +83,9 @@ def _transform_cached(
             select(TransformCache.input_hash, TransformCache.output).where(
                 TransformCache.input_hash.in_(hashes.values())
             )
-        ).tuples().all()
+        )
+        .tuples()
+        .all()
     )
     result = {value: cached[h] for value, h in hashes.items() if h in cached}
     missing = [value for value in hashes if value not in result]

@@ -18,6 +18,4 @@ class Payload(Base):
     input_hash: Mapped[str] = mapped_column(String(64), unique=True)
     # Stored ready-made: a payload never changes, so GET should not rebuild it.
     output: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
