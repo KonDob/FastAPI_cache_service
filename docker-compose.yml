@@ -1,4 +1,16 @@
 services:
+  app:
+    build: .
+    environment:
+      # Inside the compose network the database is reached by service name, not localhost.
+      DATABASE_URL: postgresql+psycopg://cache:cache@db:5432/cache
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        # Start only once PostgreSQL accepts connections, not merely once its container runs.
+        condition: service_healthy
+
   db:
     image: postgres:17-alpine
     environment:
