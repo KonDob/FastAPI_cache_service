@@ -51,6 +51,8 @@ Questions raised on the task and the answers received from the reviewers:
 - Both lists must be non-empty and of equal length, hold at most 1000 items each, and every
   string must be at most 1000 characters long and free of NUL characters; otherwise `422`.
   Only the equal length comes from the task; the other bounds are ours (see Design decisions).
+- Validation errors use FastAPI's standard `422` body, with non-ASCII characters escaped
+  (`\u0436` instead of `ж`); any JSON parser reads it back to the same value.
 
 ## Design decisions
 
@@ -74,6 +76,12 @@ Questions raised on the task and the answers received from the reviewers:
   request cannot overload the transformer or the database: all new strings of a request are
   cached in one `INSERT`, and PostgreSQL caps the number of parameters per statement. The
   values are constants in `app/api/routes.py` and can be tuned freely.
+- **Validation errors are rendered as ASCII-only JSON.** A `422` body echoes the rejected
+  input, and JSON may carry strings that cannot be encoded as UTF-8 at all (a lone surrogate
+  such as `"\ud800"`). FastAPI's default handler then crashes with a `500` while reporting the
+  error. Our handler (`app/api/errors.py`) returns the same body with non-ASCII characters
+  escaped, so such input gets a proper `422`. Strings with NUL characters are rejected for a
+  similar reason: PostgreSQL `text` cannot store them.
 - **Identical inputs are detected by a hash.** `input_hash` is SHA-256 of the canonical JSON
   `[list_1, list_2]`, with a unique constraint on it. The constraint, not the lookup, is what
   guarantees one id per input when identical requests arrive concurrently.
