@@ -26,9 +26,9 @@ The full task description is in [`Test task Python.md`](./Test%20task%20Python.m
 
 ## Status
 
-Work in progress. The service is functional: payloads are persisted in PostgreSQL, identical
-inputs reuse their id, and transformer results are cached per string. The CLI, tests and the
-Docker image come next.
+Work in progress. The service and the `cache-cli` client are functional and covered by tests:
+payloads are persisted in PostgreSQL, identical inputs reuse their id, and transformer results
+are cached per string. The Docker image comes next.
 
 ## Clarifications
 
@@ -117,8 +117,9 @@ Questions raised on the task and the answers received from the reviewers:
 │   ├── models/        # ORM models
 │   ├── services/      # payload logic
 │   └── main.py
+├── cache_cli/         # cache-cli: HTTP client, independent of app/
 ├── tests/
-│   ├── unit/          # pure helpers, no database
+│   ├── unit/          # pure helpers and CLI arguments, no database
 │   └── integration/   # API and service against real PostgreSQL
 ├── docker-compose.yml # local PostgreSQL
 ├── Test task Python.md
@@ -143,6 +144,51 @@ Configuration is read from the environment (or `.env`):
 | `LOG_LEVEL` | `INFO` | Logs show cache hits/misses and every transformer call |
 
 API docs: `http://127.0.0.1:8000/docs`
+
+## CLI
+
+`cache-cli` is installed with the project (`uv sync`) and talks to a running service over HTTP:
+
+```
+cache-cli [-H|--host URL] [-r|--repeat N] [-i|--input FILE|-] [-j|--json JSON] [-o|--output FILE|-] [-h|--help]
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `-H`, `--host` | `http://localhost:8000` | Base URL of the service (`http` or `https`) |
+| `-r`, `--repeat` | `1` | How many times the same request is sent (at least 1) |
+| `-i`, `--input` | | File with the request JSON; `-` reads stdin |
+| `-j`, `--json` | | Request JSON given inline |
+| `-o`, `--output` | `-` | File to write results to; `-` writes to stdout |
+
+The request JSON is the body of `POST /payload`; exactly one of `--input` and `--json` is required.
+Each iteration creates the payload and reads it back. Results are printed as a JSON array:
+
+```bash
+$ cache-cli -j '{"list_1": ["first string"], "list_2": ["other string"]}' -r 2
+[
+  {"iteration": 1, "id": "3753…", "status": "created",  "output": "FIRST STRING, OTHER STRING", "elapsed_ms": 42.4},
+  {"iteration": 2, "id": "3753…", "status": "existing", "output": "FIRST STRING, OTHER STRING", "elapsed_ms": 7.3}
+]
+```
+
+`status` is `created` when the service generated a new payload and `existing` when it reused the
+identifier of an earlier identical request. Exit codes: `0` success, `1` the service failed or
+rejected the request (message on stderr, nothing on stdout), `2` invalid arguments or input.
+
+Design notes:
+
+- **Arguments are parsed and sanitized by Pydantic Settings** (`cache_cli/settings.py`): the URL
+  scheme, `--repeat >= 1`, that the input file exists and that the request JSON has two lists of
+  strings of equal length are checked before any request is sent. The service's own size limits
+  are not duplicated in the client; a request breaking them is reported as the server's `422`.
+- **Only the command line is read.** Environment variables and `.env` are ignored, so a stray
+  variable such as `host` cannot change what the tool does.
+- **The client does not import `app/`.** It is a plain HTTP client of the API and works against
+  any running instance. Tests drive it through `TestClient`, so no real server is needed.
+- **`-H` instead of `-h` for the host**, as agreed (see Clarifications).
+- **`--repeat` sends the same request N times**, which shows the identifier being reused and the
+  faster cached responses; it runs sequentially and stops at the first failure.
 
 ## Tests and checks
 
