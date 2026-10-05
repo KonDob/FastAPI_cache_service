@@ -49,7 +49,8 @@ Questions raised on the task and the answers received from the reviewers:
   malformed answer; nothing is cached or stored in that case.
 - `GET /payload/{id}` returns `{"output": "..."}`, or `404` for an unknown id.
 - Both lists must be non-empty and of equal length, hold at most 1000 items each, and every
-  string must be at most 1000 characters long; otherwise `422`.
+  string must be at most 1000 characters long and free of NUL characters; otherwise `422`.
+  Only the equal length comes from the task; the other bounds are ours (see Design decisions).
 
 ## Design decisions
 
@@ -67,6 +68,12 @@ Questions raised on the task and the answers received from the reviewers:
 - **Cache rows are keyed by the SHA-256 of the string**, not the string itself: a B-tree index on
   unbounded text fails for long values, a fixed-size digest does not. Concurrent requests that
   cache the same string do not conflict (`INSERT ... ON CONFLICT DO NOTHING`).
+- **Input size is bounded by our choice, not by the task.** The task only requires the two
+  lists to have the same length; the three-item sample is an illustration, not a limit. We
+  added the bounds (1–1000 items per list, up to 1000 characters per string) so that a single
+  request cannot overload the transformer or the database: all new strings of a request are
+  cached in one `INSERT`, and PostgreSQL caps the number of parameters per statement. The
+  values are constants in `app/api/routes.py` and can be tuned freely.
 - **Identical inputs are detected by a hash.** `input_hash` is SHA-256 of the canonical JSON
   `[list_1, list_2]`, with a unique constraint on it. The constraint, not the lookup, is what
   guarantees one id per input when identical requests arrive concurrently.
