@@ -28,6 +28,28 @@ The full task description is in [`Test task Python.md`](./Test%20task%20Python.m
 
 Work in progress. HTTP endpoints are in place with in-memory stubs; PostgreSQL persistence and real caching come next.
 
+## API behaviour
+
+- `POST /payload` returns `201 Created` with a new id when the input is new, and
+  `200 OK` with the **existing** id when the same input was submitted before.
+  Repeating a request is therefore safe and never creates duplicates.
+- `GET /payload/{id}` returns `{"output": "..."}`, or `404` for an unknown id.
+- Both lists must be non-empty and of equal length, otherwise `422`.
+
+## Known limitations
+
+- **Output is ambiguous for strings containing `", "`.** The output format is fixed by
+  the task as a single comma-joined string, so `["a, b"]` and `["a", "b"]` can produce
+  the same text. A JSON array would avoid this but would break the required contract.
+- **Payload identity is order- and position-sensitive.** Swapping `list_1` and `list_2`,
+  or reordering items, yields a different payload and a different id, because the output
+  differs too. Only an exact repeat of the input reuses an id.
+- **Input is compared verbatim.** No trimming or case folding is applied, so `"abc"` and
+  `"abc "` are different inputs.
+- **No size limits** on list length or string length are enforced yet.
+- **Storage is in-memory for now** (see Status): data is lost on restart and is not shared
+  between worker processes.
+
 ## Layout
 
 ```
