@@ -45,6 +45,8 @@ Questions raised on the task and the answers received from the reviewers:
 - `POST /payload` returns `201 Created` with a new id when the input is new, and
   `200 OK` with the **existing** id when the same input was submitted before.
   Repeating a request is therefore safe and never creates duplicates.
+- `POST /payload` returns `502 Bad Gateway` when the transformer service fails or returns a
+  malformed answer; nothing is cached or stored in that case.
 - `GET /payload/{id}` returns `{"output": "..."}`, or `404` for an unknown id.
 - Both lists must be non-empty and of equal length, hold at most 1000 items each, and every
   string must be at most 1000 characters long; otherwise `422`.

@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Payload, TransformCache
-from app.services.transformer import Transformer
+from app.services.transformer import Transformer, TransformerError
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,13 @@ def _transform_cached(
     if not missing:
         return result
 
-    fresh = dict(zip(missing, transformer(missing), strict=True))
+    outputs = transformer(missing)
+    # Never cache a misaligned answer: it would serve wrong results for good.
+    if len(outputs) != len(missing):
+        raise TransformerError(
+            f"Transformer returned {len(outputs)} result(s) for {len(missing)} input(s)"
+        )
+    fresh = dict(zip(missing, outputs, strict=True))
     rows = [{"input_hash": hashes[v], "input": v, "output": out} for v, out in fresh.items()]
     # Concurrent requests may cache the same string; the first writer wins, others are no-ops.
     session.execute(insert(TransformCache).values(rows).on_conflict_do_nothing())

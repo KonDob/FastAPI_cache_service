@@ -14,9 +14,17 @@ from fastapi import Depends
 logger = logging.getLogger(__name__)
 
 
+class TransformerError(Exception):
+    """The transformer service failed or broke its contract."""
+
+
 class Transformer(Protocol):
     def __call__(self, values: Sequence[str]) -> list[str]:
-        """Transform values in one round trip; the result is aligned with the input."""
+        """Transform values in one round trip; the result is aligned with the input.
+
+        Implementations raise TransformerError when the service cannot be used, so callers
+        handle one error type regardless of the transport behind it.
+        """
         ...
 
 

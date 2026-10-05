@@ -1,5 +1,6 @@
 """HTTP routes for payload create / read."""
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -8,7 +9,9 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.db.session import SessionDep
 from app.services import payload as payload_service
-from app.services.transformer import TransformerDep
+from app.services.transformer import TransformerDep, TransformerError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/payload", tags=["payload"])
 
@@ -52,6 +55,7 @@ class PayloadReadResponse(BaseModel):
             "model": PayloadCreateResponse,
             "description": "Payload for this input already exists; its identifier is reused.",
         },
+        status.HTTP_502_BAD_GATEWAY: {"description": "The transformer service failed."},
     },
 )
 def create_payload(
@@ -60,7 +64,15 @@ def create_payload(
     session: SessionDep,
     transformer: TransformerDep,
 ) -> PayloadCreateResponse:
-    result = payload_service.create_payload(session, transformer, body.list_1, body.list_2)
+    try:
+        result = payload_service.create_payload(session, transformer, body.list_1, body.list_2)
+    except TransformerError:
+        # The fault is upstream, not in the request or in this service: 502, not 500.
+        logger.exception("Transformer service failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Transformer service failed",
+        ) from None
     # 201 vs 200 tells clients whether a new resource appeared, while POST stays idempotent.
     if not result.created:
         response.status_code = status.HTTP_200_OK
