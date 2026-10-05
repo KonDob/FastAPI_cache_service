@@ -4,7 +4,9 @@ A test assignment: a FastAPI microservice for generating and caching payloads.
 
 ## About
 
-This repository holds the solution to a coding task. The service builds a payload from two string lists, runs each string through a “transformer” (simulating an external service), and caches transformation results and payloads in PostgreSQL.
+This repository holds the solution to a coding task. The service builds a payload from two
+string lists, runs each string through a "transformer" (simulating an external service), and
+caches transformation results and payloads in PostgreSQL.
 
 Functionality in brief:
 
@@ -18,11 +20,11 @@ The full task description is in [`Test task Python.md`](./Test%20task%20Python.m
 
 ## Stack
 
-- Python / FastAPI
-- SQLAlchemy
-- PostgreSQL
-- Docker
-- Pydantic Settings (CLI)
+- Python 3.11+ / FastAPI, served by uvicorn
+- SQLAlchemy 2 with psycopg 3, PostgreSQL 17
+- Pydantic Settings and httpx2 (CLI)
+- Docker and docker compose
+- uv for dependencies; pytest, ruff and mypy (strict) for checks
 
 ## Status
 
@@ -47,14 +49,14 @@ Questions raised on the task and the answers received from the reviewers:
   Repeating a request is therefore safe and never creates duplicates.
 - `POST /payload` returns `502 Bad Gateway` when the transformer service fails or returns a
   malformed answer; nothing is cached or stored in that case.
-- `GET /health` returns `{"status": "ok"}`, or `503` when the database is unreachable; the
-  Docker healthcheck uses it.
 - `GET /payload/{id}` returns `{"output": "..."}`, or `404` for an unknown id.
 - Both lists must be non-empty and of equal length, hold at most 1000 items each, and every
   string must be at most 1000 characters long and free of NUL characters; otherwise `422`.
   Only the equal length comes from the task; the other bounds are ours (see Design decisions).
 - Validation errors use FastAPI's standard `422` body, with non-ASCII characters escaped
   (`\u0436` instead of `ж`); any JSON parser reads it back to the same value.
+- `GET /health` returns `{"status": "ok"}`, or `503` when the database is unreachable; the
+  Docker healthcheck uses it.
 
 ## Design decisions
 
@@ -93,9 +95,6 @@ Questions raised on the task and the answers received from the reviewers:
 - **Output is ambiguous for strings containing `", "`.** The output format is fixed by
   the task as a single comma-joined string, so `["a, b"]` and `["a", "b"]` can produce
   the same text. A JSON array would avoid this but would break the required contract.
-- **Payload identity is order- and position-sensitive.** Swapping `list_1` and `list_2`,
-  or reordering items, yields a different payload and a different id, because the output
-  differs too. Only an exact repeat of the input reuses an id.
 - **Input is compared verbatim.** No trimming or case folding is applied, so `"abc"` and
   `"abc "` are different inputs.
 - **Concurrent requests with the same new strings each call the transformer.** Both miss the
@@ -108,6 +107,12 @@ Questions raised on the task and the answers received from the reviewers:
   so switching to another database needs that one statement adapted.
 - **No migrations.** Tables are created on startup with `create_all`; changing an existing
   column requires recreating the database. Alembic would be the next step for a real deployment.
+- **Credentials are for local use only.** The database user and password in
+  `docker-compose.yml` are fixed development values; a real deployment would inject them as
+  secrets.
+- **CLI help shows types instead of names.** `cache-cli --help` prints `str` or `AnyHttpUrl`
+  where the task writes `FILE|-` or `URL`; Pydantic Settings offers no simple way to rename
+  them, so each option's meaning is in its description.
 
 ## Layout
 
@@ -122,7 +127,7 @@ Questions raised on the task and the answers received from the reviewers:
 ├── cache_cli/         # cache-cli: HTTP client, independent of app/
 ├── tests/
 │   ├── unit/          # pure helpers and CLI arguments, no database
-│   └── integration/   # API and service against real PostgreSQL
+│   └── integration/   # API, service and CLI against real PostgreSQL
 ├── Dockerfile         # service image
 ├── docker-compose.yml # service + PostgreSQL
 ├── Test task Python.md
@@ -213,7 +218,7 @@ Design notes:
 docker compose up -d --wait db   # integration tests need PostgreSQL
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
-uv run mypy app tests
+uv run mypy app cache_cli tests
 ```
 
 Integration tests use a separate `cache_test` database on the same server as `DATABASE_URL`
