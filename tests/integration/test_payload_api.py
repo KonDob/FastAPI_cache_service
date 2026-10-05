@@ -81,6 +81,16 @@ def test_create_rejects_invalid_input(client: TestClient, body: dict[str, Any]) 
     assert response.status_code == 422
 
 
+def test_create_rejects_lone_surrogate_with_422(client: TestClient) -> None:
+    # Valid JSON, but not encodable as UTF-8: the error body must still be renderable.
+    body = '{"list_1": ["lone \\ud800"], "list_2": ["b"]}'
+
+    response = client.post("/payload", content=body, headers={"content-type": "application/json"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "list_1", 0]
+
+
 def test_create_accepts_input_at_the_limits(
     client: TestClient, transformer: CountingTransformer
 ) -> None:

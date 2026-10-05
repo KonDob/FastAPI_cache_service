@@ -5,8 +5,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
 from app import models  # noqa: F401  # registers tables on Base.metadata
+from app.api.errors import request_validation_exception_handler
 from app.api.routes import router as payload_router
 from app.core.config import settings
 from app.db.base import Base
@@ -30,4 +32,5 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 app.include_router(payload_router)
