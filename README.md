@@ -30,6 +30,16 @@ Work in progress. Payloads are persisted in PostgreSQL and identical inputs reus
 The transformer and its per-string cache come next; until then the output is built by a
 placeholder.
 
+## Clarifications
+
+Questions raised on the task and the answers received from the reviewers:
+
+- **"Payload files"** — payloads are stored in the database; no files are generated.
+- **CLI `-h` clash** — `-H` / `--host` selects the server, `-h` / `--help` shows help.
+- **Payload identity** — an exact match of `list_1` and `list_2`, element order included.
+  The transformer is cached per string, so a new payload built from already known strings
+  gets its own id but reuses the cached transformations.
+
 ## API behaviour
 
 - `POST /payload` returns `201 Created` with a new id when the input is new, and
