@@ -26,9 +26,9 @@ The full task description is in [`Test task Python.md`](./Test%20task%20Python.m
 
 ## Status
 
-Work in progress. Payloads are persisted in PostgreSQL and identical inputs reuse their id.
-The transformer and its per-string cache come next; until then the output is built by a
-placeholder.
+Work in progress. The service is functional: payloads are persisted in PostgreSQL, identical
+inputs reuse their id, and transformer results are cached per string. The CLI, tests and the
+Docker image come next.
 
 ## Clarifications
 
@@ -53,6 +53,17 @@ Questions raised on the task and the answers received from the reviewers:
 - **Payloads are stored ready-made.** The final `output` string is built once on `POST` and
   saved in the `payload` table. A payload never changes, so `GET` is a single primary-key
   lookup and never rebuilds the string or touches the transformer.
+- **The transformer is a simulated external service.** It upper-cases strings behind a batch
+  interface (`list[str] -> list[str]`) with an artificial per-call delay, and is injected as a
+  FastAPI dependency so tests can replace it with a counting fake.
+- **Transformer results are cached per string** in the `transform_cache` table. On `POST` the
+  service looks up all strings of the request at once and calls the transformer **once**, only
+  with the strings that are not cached yet; a string repeated within a request is sent once.
+  New results are committed before the payload is stored, so they are kept even if storing the
+  payload fails.
+- **Cache rows are keyed by the SHA-256 of the string**, not the string itself: a B-tree index on
+  unbounded text fails for long values, a fixed-size digest does not. Concurrent requests that
+  cache the same string do not conflict (`INSERT ... ON CONFLICT DO NOTHING`).
 - **Identical inputs are detected by a hash.** `input_hash` is SHA-256 of the canonical JSON
   `[list_1, list_2]`, with a unique constraint on it. The constraint, not the lookup, is what
   guarantees one id per input when identical requests arrive concurrently.
@@ -67,7 +78,13 @@ Questions raised on the task and the answers received from the reviewers:
   differs too. Only an exact repeat of the input reuses an id.
 - **Input is compared verbatim.** No trimming or case folding is applied, so `"abc"` and
   `"abc "` are different inputs.
-- **No size limits** on list length or string length are enforced yet.
+- **No size limits** on list length or string length are enforced yet. Very large requests
+  (tens of thousands of new strings) would exceed PostgreSQL's bind-parameter limit in a single
+  cache insert.
+- **The cache never expires.** That is correct for a deterministic transformer; a real external
+  service whose results can change would need a TTL or invalidation.
+- **PostgreSQL-specific upsert.** `ON CONFLICT DO NOTHING` is used via the PostgreSQL dialect,
+  so switching to another database needs that one statement adapted.
 - **No migrations.** Tables are created on startup with `create_all`; changing an existing
   column requires recreating the database. Alembic would be the next step for a real deployment.
 
@@ -96,6 +113,12 @@ docker compose up -d --wait   # PostgreSQL
 uv run uvicorn app.main:app --reload
 ```
 
-Configuration is read from the environment (or `.env`): `DATABASE_URL` is the SQLAlchemy URL.
+Configuration is read from the environment (or `.env`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DATABASE_URL` | `postgresql+psycopg://cache:cache@localhost:5432/cache` | SQLAlchemy database URL |
+| `TRANSFORMER_DELAY_SECONDS` | `0.5` | Simulated latency of one transformer call |
+| `LOG_LEVEL` | `INFO` | Logs show cache hits/misses and every transformer call |
 
 API docs: `http://127.0.0.1:8000/docs`
