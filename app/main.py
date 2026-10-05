@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 
 from app import models  # noqa: F401  # registers tables on Base.metadata
 from app.api.errors import request_validation_exception_handler
+from app.api.health import router as health_router
 from app.api.routes import router as payload_router
 from app.core.config import settings
 from app.db.base import Base
@@ -34,3 +35,4 @@ app = FastAPI(
 )
 app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 app.include_router(payload_router)
+app.include_router(health_router)
