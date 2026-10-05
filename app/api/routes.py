@@ -1,5 +1,6 @@
 """HTTP routes for payload create / read."""
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
@@ -12,9 +13,19 @@ from app.services.transformer import TransformerDep
 router = APIRouter(prefix="/payload", tags=["payload"])
 
 
+# Bounds keep a single request from overloading the transformer and the database:
+# one request's new strings go to the cache in a single INSERT, and PostgreSQL caps
+# the number of bind parameters per statement.
+MAX_ITEMS_PER_LIST = 1000
+MAX_STRING_LENGTH = 1000
+
+BoundedString = Annotated[str, Field(max_length=MAX_STRING_LENGTH)]
+BoundedList = Annotated[list[BoundedString], Field(min_length=1, max_length=MAX_ITEMS_PER_LIST)]
+
+
 class PayloadCreate(BaseModel):
-    list_1: list[str] = Field(..., min_length=1)
-    list_2: list[str] = Field(..., min_length=1)
+    list_1: BoundedList
+    list_2: BoundedList
 
     @model_validator(mode="after")
     def lists_must_match_length(self) -> "PayloadCreate":

@@ -46,7 +46,8 @@ Questions raised on the task and the answers received from the reviewers:
   `200 OK` with the **existing** id when the same input was submitted before.
   Repeating a request is therefore safe and never creates duplicates.
 - `GET /payload/{id}` returns `{"output": "..."}`, or `404` for an unknown id.
-- Both lists must be non-empty and of equal length, otherwise `422`.
+- Both lists must be non-empty and of equal length, hold at most 1000 items each, and every
+  string must be at most 1000 characters long; otherwise `422`.
 
 ## Design decisions
 
@@ -78,9 +79,6 @@ Questions raised on the task and the answers received from the reviewers:
   differs too. Only an exact repeat of the input reuses an id.
 - **Input is compared verbatim.** No trimming or case folding is applied, so `"abc"` and
   `"abc "` are different inputs.
-- **No size limits** on list length or string length are enforced yet. Very large requests
-  (tens of thousands of new strings) would exceed PostgreSQL's bind-parameter limit in a single
-  cache insert.
 - **The cache never expires.** That is correct for a deterministic transformer; a real external
   service whose results can change would need a TTL or invalidation.
 - **PostgreSQL-specific upsert.** `ON CONFLICT DO NOTHING` is used via the PostgreSQL dialect,
