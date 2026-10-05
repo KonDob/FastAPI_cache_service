@@ -26,12 +26,6 @@ The full task description is in [`Test task Python.md`](./Test%20task%20Python.m
 - Docker and docker compose
 - uv for dependencies; pytest, ruff and mypy (strict) for checks
 
-## Status
-
-Feature complete. The service and the `cache-cli` client are functional, covered by tests and
-run in Docker: payloads are persisted in PostgreSQL, identical inputs reuse their id, and
-transformer results are cached per string.
-
 ## Clarifications
 
 Questions raised on the task and the answers received from the reviewers:
