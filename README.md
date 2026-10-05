@@ -26,7 +26,9 @@ The full task description is in [`Test task Python.md`](./Test%20task%20Python.m
 
 ## Status
 
-Work in progress. HTTP endpoints are in place with in-memory stubs; PostgreSQL persistence and real caching come next.
+Work in progress. Payloads are persisted in PostgreSQL and identical inputs reuse their id.
+The transformer and its per-string cache come next; until then the output is built by a
+placeholder.
 
 ## API behaviour
 
@@ -35,6 +37,15 @@ Work in progress. HTTP endpoints are in place with in-memory stubs; PostgreSQL p
   Repeating a request is therefore safe and never creates duplicates.
 - `GET /payload/{id}` returns `{"output": "..."}`, or `404` for an unknown id.
 - Both lists must be non-empty and of equal length, otherwise `422`.
+
+## Design decisions
+
+- **Payloads are stored ready-made.** The final `output` string is built once on `POST` and
+  saved in the `payload` table. A payload never changes, so `GET` is a single primary-key
+  lookup and never rebuilds the string or touches the transformer.
+- **Identical inputs are detected by a hash.** `input_hash` is SHA-256 of the canonical JSON
+  `[list_1, list_2]`, with a unique constraint on it. The constraint, not the lookup, is what
+  guarantees one id per input when identical requests arrive concurrently.
 
 ## Known limitations
 
@@ -47,16 +58,20 @@ Work in progress. HTTP endpoints are in place with in-memory stubs; PostgreSQL p
 - **Input is compared verbatim.** No trimming or case folding is applied, so `"abc"` and
   `"abc "` are different inputs.
 - **No size limits** on list length or string length are enforced yet.
-- **Storage is in-memory for now** (see Status): data is lost on restart and is not shared
-  between worker processes.
+- **No migrations.** Tables are created on startup with `create_all`; changing an existing
+  column requires recreating the database. Alembic would be the next step for a real deployment.
 
 ## Layout
 
 ```
 ├── app/
 │   ├── api/           # HTTP routes
-│   ├── services/      # payload logic (stubbed for now)
+│   ├── core/          # settings
+│   ├── db/            # engine, session, declarative base
+│   ├── models/        # ORM models
+│   ├── services/      # payload logic
 │   └── main.py
+├── docker-compose.yml # local PostgreSQL
 ├── Test task Python.md
 ├── pyproject.toml
 └── README.md
@@ -66,7 +81,11 @@ Work in progress. HTTP endpoints are in place with in-memory stubs; PostgreSQL p
 
 ```bash
 uv sync
+cp .env.example .env          # adjust DB_PORT / DATABASE_URL if 5432 is taken
+docker compose up -d --wait   # PostgreSQL
 uv run uvicorn app.main:app --reload
 ```
+
+Configuration is read from the environment (or `.env`): `DATABASE_URL` is the SQLAlchemy URL.
 
 API docs: `http://127.0.0.1:8000/docs`
