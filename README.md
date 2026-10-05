@@ -81,6 +81,10 @@ Questions raised on the task and the answers received from the reviewers:
   differs too. Only an exact repeat of the input reuses an id.
 - **Input is compared verbatim.** No trimming or case folding is applied, so `"abc"` and
   `"abc "` are different inputs.
+- **Concurrent requests with the same new strings each call the transformer.** Both miss the
+  cache before either has stored its results, so the service is called twice. The result is
+  still correct and only one copy is cached; avoiding the extra call would need a per-string
+  lock, which is not worth the complexity here.
 - **The cache never expires.** That is correct for a deterministic transformer; a real external
   service whose results can change would need a TTL or invalidation.
 - **PostgreSQL-specific upsert.** `ON CONFLICT DO NOTHING` is used via the PostgreSQL dialect,
