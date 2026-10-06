@@ -16,8 +16,6 @@ Functionality in brief:
 - `cache-cli` CLI tool for programmatic API testing
 - Docker image for deployment
 
-The full task description is in [`Test task Python.md`](./Test%20task%20Python.md).
-
 ## Stack
 
 - Python 3.11+ / FastAPI, served by uvicorn
@@ -124,7 +122,6 @@ Questions raised on the task and the answers received from the reviewers:
 │   └── integration/   # API, service and CLI against real PostgreSQL
 ├── Dockerfile         # service image
 ├── docker-compose.yml # service + PostgreSQL
-├── Test task Python.md
 ├── pyproject.toml
 └── README.md
 ```
